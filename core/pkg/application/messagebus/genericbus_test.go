@@ -2,7 +2,6 @@ package messagebus_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,51 +10,89 @@ import (
 )
 
 func TestMessageBusPublish(t *testing.T) {
-    bus := messagebus.NewGenericMessageBus()
-
-    // Variável para verificar se o handler foi chamado.
+    t.Helper()
     var handlerCalled bool
-    var mu sync.Mutex
+    testCases := []struct {
+        name          string
+        message       message.Message
+        handler       messagebus.HandlerFunc
+        expectError   bool
+        handlerCalled bool
+    }{
+        {
+            name: "Test with ExampleCommand",
+            message: message.NewExampleCommand(),
+            handler: func(ctx context.Context, msg message.Message) error {
+                if _, ok := msg.(message.Command); !ok {
+                    t.Errorf("Message type is incorrect")
+                    return nil
+                }
 
-    // Definição do handler de teste para um comando específico.
-    testHandler := func(ctx context.Context, msg message.Message) error {
-        if _, ok := msg.(message.Command); !ok {
-            t.Errorf("Message type is incorrect")
-            return nil
-        }
+                handlerCalled = true
+                return nil
+            },
+            expectError:   false,
+            handlerCalled: true,
+        },
+        {
+            name: "Test with ExampleEvent",
+            message: message.NewExampleEvent(),
+            handler: func(ctx context.Context, msg message.Message) error {
+                if _, ok := msg.(message.Event); !ok {
+                    t.Errorf("Message type is incorrect")
+                    return nil
+                }
 
-        mu.Lock()
-        handlerCalled = true
-        mu.Unlock()
-        return nil
+                handlerCalled = true
+                return nil
+            },
+            expectError:   false,
+            handlerCalled: true,
+        },
+        {
+            name: "Test with ExampleQuery",
+            message: message.NewExampleQuery(),
+            handler: func(ctx context.Context, msg message.Message) error {
+                if _, ok := msg.(message.Query); !ok {
+                    t.Errorf("Message type is incorrect")
+                    return nil
+                }
+
+                handlerCalled = true
+                return nil
+            },
+            expectError:   false,
+            handlerCalled: true,
+        },
+        // Adicione mais casos de teste conforme necessário
     }
 
-    testCommand := message.NewExampleCommand()
+    for _, tc := range testCases {
+        t.Run(tc.name, func(tr *testing.T) {
+            handlerCalled = false
+            bus := messagebus.NewGenericMessageBus()
 
-    // Registro do handler de teste.
-    err := bus.Subscribe(testCommand.Type(), testHandler)
-    if err != nil {
-        t.Fatalf("Subscribe failed: %v", err)
-    }
+            err := bus.Subscribe(tc.message.Type(), tc.handler)
+            if err != nil {
+                tr.Fatalf("Subscribe failed: %v", err)
+            }
 
-    // Utiliza-se a instância específica da mensagem (Command, Query, Event) ao invés de uma mensagem genérica.
-    err = bus.Publish(context.Background(), testCommand)
-    if err != nil {
-        t.Fatalf("Publish failed: %v", err)
-    }
+            err = bus.Publish(context.Background(), tc.message)
+            if (err != nil) != tc.expectError {
+                tr.Fatalf("Publish failed: %v", err)
+            }
 
-    // Espera para dar tempo ao handler de ser chamado.
-    // Este atraso simula o tempo de processamento assíncrono.
-    time.Sleep(100 * time.Millisecond)
+            time.Sleep(100 * time.Millisecond)
 
-    mu.Lock()
-    defer mu.Unlock()
-    if !handlerCalled {
-        t.Errorf("handler was not called")
+            if handlerCalled != tc.handlerCalled {
+                tr.Errorf("handler was not called")
+            }
+        })
     }
 }
 
 func TestMessageBusRequestReply(t *testing.T) {
+    t.Helper()
     bus := messagebus.NewGenericMessageBus()
 
     testQuery := message.NewExampleQuery()
@@ -77,6 +114,7 @@ func TestMessageBusRequestReply(t *testing.T) {
 }
 
 func TestMessageBusRequestReplyTimeout(t *testing.T) {
+    t.Helper()
     bus := messagebus.NewGenericMessageBus()
 
     testQuery := message.NewExampleQuery()

@@ -17,7 +17,7 @@ type HandlerFunc func(ctx context.Context, msg message.Message) error
 type MessageBus interface {
     Publish(ctx context.Context, msg message.Message) error
     Subscribe(msgType string, handler HandlerFunc) error
-    Unsubscribe(msgType string) error
+    Unsubscribe(msgType string, handler HandlerFunc) error
 }
 
 // CommandBus define a interface para o envio de comandos.
